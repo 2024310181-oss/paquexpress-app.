@@ -1,7 +1,7 @@
 import 'dart:convert';
-import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
+import 'package:image_picker/image_picker.dart';  // ← NUEVO IMPORT
 import 'package:geolocator/geolocator.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'services.dart';
@@ -17,31 +17,15 @@ class CamaraPage extends StatefulWidget {
 }
 
 class _CamaraPageState extends State<CamaraPage> {
-  CameraController? _controller;
-  List<CameraDescription>? _cameras;
-  bool _isCameraReady = false;
   bool _loading = false;
-  XFile? _imageFile;
+  Uint8List? _imageBytes;
   Position? _currentPosition;
+  final ImagePicker _picker = ImagePicker();  // ← NUEVO
 
   @override
   void initState() {
     super.initState();
-    _initCamera();
     _getCurrentLocation();
-  }
-
-  Future<void> _initCamera() async {
-    try {
-      _cameras = await availableCameras();
-      _controller = CameraController(_cameras![0], ResolutionPreset.medium);
-      
-      await _controller!.initialize();
-      if (!mounted) return;
-      setState(() => _isCameraReady = true);
-    } catch (e) {
-      print('Error inicializando cámara: $e');
-    }
   }
 
   Future<void> _getCurrentLocation() async {
@@ -71,18 +55,41 @@ class _CamaraPageState extends State<CamaraPage> {
   }
 
   Future<void> _takePicture() async {
-    if (_controller == null || !_controller!.value.isInitialized) return;
-    
     try {
-      XFile file = await _controller!.takePicture();
-      setState(() => _imageFile = file);
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.camera,
+        preferredCameraDevice: CameraDevice.rear,
+        maxWidth: 800,
+        maxHeight: 600,
+        imageQuality: 80,
+      );
+      
+      if (image != null) {
+        final bytes = await image.readAsBytes();
+        if (mounted) {
+          setState(() => _imageBytes = bytes);
+          
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Foto tomada exitosamente')),
+          );
+        }
+      }
     } catch (e) {
       print('Error tomando foto: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al tomar foto: $e')),
+      );
     }
   }
 
+  // ... el resto del código se mantiene igual
   void _verMapa() {
-    if (_currentPosition == null) return;
+    if (_currentPosition == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ubicación no disponible')),
+      );
+      return;
+    }
     
     Navigator.push(
       context,
@@ -97,7 +104,7 @@ class _CamaraPageState extends State<CamaraPage> {
   }
 
   Future<void> _confirmarEntrega() async {
-    if (_imageFile == null || _currentPosition == null) {
+    if (_imageBytes == null || _currentPosition == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Toma una foto y obtén la ubicación primero')),
       );
@@ -108,16 +115,19 @@ class _CamaraPageState extends State<CamaraPage> {
     
     try {
       // Convertir imagen a base64
-      List<int> imageBytes = await File(_imageFile!.path).readAsBytes();
-      String base64Image = base64Encode(imageBytes);
+      String base64Image = base64Encode(_imageBytes!);
       
       final prefs = await SharedPreferences.getInstance();
       final idAgente = prefs.getInt('idAgente');
       
+      if (idAgente == null) {
+        throw Exception('No se encontró el ID del agente');
+      }
+      
       // Registrar entrega
       final response = await ApiService.registrarEntrega(
         widget.paquete['id'],
-        idAgente!,
+        idAgente,
         base64Image,
         _currentPosition!.latitude,
         _currentPosition!.longitude,
@@ -140,24 +150,36 @@ class _CamaraPageState extends State<CamaraPage> {
     setState(() => _loading = false);
   }
 
-  @override
-  void dispose() {
-    _controller?.dispose();
-    super.dispose();
-  }
-
-  Widget _buildCameraPreview() {
-    if (!_isCameraReady || _controller == null) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    
-    return CameraPreview(_controller!);
-  }
-
   Widget _buildImagePreview() {
-    if (_imageFile == null) return const SizedBox();
-    
-    return Image.file(File(_imageFile!.path));
+    if (_imageBytes != null) {
+      return Image.memory(
+        _imageBytes!,
+        height: 300,
+        width: double.infinity,
+        fit: BoxFit.cover,
+      );
+    } else {
+      return Container(
+        height: 300,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey),
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.camera_alt, size: 50, color: Colors.grey[600]),
+            const SizedBox(height: 10),
+            Text(
+              'Presiona "Tomar Foto" para capturar la evidencia',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      );
+    }
   }
 
   @override
@@ -182,21 +204,12 @@ class _CamaraPageState extends State<CamaraPage> {
             
             const SizedBox(height: 20),
             
-            // Vista de cámara
-            Container(
-              height: 300,
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: _imageFile == null 
-                  ? _buildCameraPreview()
-                  : _buildImagePreview(),
-            ),
+            // Vista de imagen
+            _buildImagePreview(),
             
             const SizedBox(height: 20),
             
-            // Botones de control - CORREGIDO
+            // Botones de control
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
@@ -206,6 +219,7 @@ class _CamaraPageState extends State<CamaraPage> {
                   label: const Text('Tomar Foto'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.blue,
+                    foregroundColor: Colors.white,
                   ),
                 ),
                 
@@ -215,6 +229,7 @@ class _CamaraPageState extends State<CamaraPage> {
                   label: const Text('Ver Ubicación'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.orange,
+                    foregroundColor: Colors.white,
                   ),
                 ),
               ], 
@@ -229,8 +244,13 @@ class _CamaraPageState extends State<CamaraPage> {
                 title: const Text('Ubicación GPS'),
                 subtitle: _currentPosition == null
                     ? const Text('Obteniendo ubicación...')
-                    : Text('Lat: ${_currentPosition!.latitude.toStringAsFixed(6)}\n'
-                          'Lon: ${_currentPosition!.longitude.toStringAsFixed(6)}'),
+                    : Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text('Lat: ${_currentPosition!.latitude.toStringAsFixed(6)}'),
+                          Text('Lon: ${_currentPosition!.longitude.toStringAsFixed(6)}'),
+                        ],
+                      ),
               ),
             ),
             
