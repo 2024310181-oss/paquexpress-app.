@@ -1,12 +1,12 @@
-# 🚚 Sistema de Entregas Móvil - Paquexpress
+# Sistema de Entregas Móvil - Paquexpress
 
-## 📋 Descripción del Proyecto
+## Descripción del Proyecto
 Sistema móvil desarrollado para **Paquexpress S.A. de C.V.** que permite a los agentes de entrega registrar entregas de paquetes con evidencia fotográfica y geolocalización.
 
-## 🎯 Objetivo
+## Objetivo
 Mejorar la trazabilidad y seguridad en el proceso de entrega de paquetes mediante una aplicación móvil que capture evidencias digitales.
 
-## 🛠️ Stack Tecnológico
+## Stack Tecnológico
 
 ### Frontend Móvil
 - **Framework:** Flutter (Dart)
@@ -21,7 +21,7 @@ Mejorar la trazabilidad y seguridad en el proceso de entrega de paquetes mediant
 - **Motor:** MySQL
 - **Tablas:** agentes, paquetes, entregas, evidencias
 
-## ⚙️ Instalación y Configuración
+## Instalación y Configuración
 
 ### Prerrequisitos
 - Python 3.8+
