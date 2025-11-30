@@ -28,11 +28,9 @@ Toda la información se guarda en una base de datos MySQL
 y el acceso de los usuarios se valida con un sistema de autenticación simple basado en MD5.
 
 Base de Datos
-
 Se usa MySQL y contiene las tablas principales:
-
 agentes
-paquetes
+paquete
 entregas
 evidencias
 
@@ -46,8 +44,7 @@ Flutter instalado
 Un servidor MySQL
 
 Git para clonar el proyecto
-git clone https://github.com/tuusuario/paquexpress-app.git
-cd paquexpress-app
-1. Clonar el Repositorio
+
+Clonar el Repositorio
 git clone https://github.com/tuusuario/paquexpress-app.git
 cd paquexpress-app
